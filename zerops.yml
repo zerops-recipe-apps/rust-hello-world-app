@@ -1,0 +1,33 @@
+zerops:
+  - setup: prod
+    build:
+      base: rust@latest
+      buildCommands:
+        - cargo build --release
+      deployFiles:
+        - target/release/rust-hello-world-app
+    run:
+      base: rust@latest
+      ports:
+        - port: 3000
+          httpSupport: true
+      start: ./rust-hello-world-app
+
+  - setup: dev
+    build:
+      base: rust@latest
+      buildCommands:
+        - cargo build
+      deployFiles:
+        - target/debug/rust-hello-world-app
+        - src
+        - Cargo.toml
+        - Cargo.lock
+    run:
+      base: rust@latest
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        RUST_BACKTRACE: "1"
+      start: ./rust-hello-world-app
