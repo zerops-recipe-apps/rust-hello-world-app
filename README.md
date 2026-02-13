@@ -1,27 +1,62 @@
-# Rust Hello World Recipe
+// README.md
 
-<!-- #ZEROPS_EXTRACT_START:intro# -->
-Basic example of running [Rust](https://www.rust-lang.org/) applications on [Zerops](https://zerops.io).
-Simple Rust API using Axum with a single endpoint that reads from and writes to a PostgreSQL database.
-<!-- #ZEROPS_EXTRACT_END:intro# -->
+# Rust Hello World Recipe App
+Simple Rust API using Axum with a single endpoint that reads from and writes to a PostgreSQL database. Used within [Rust Hello World recipe](https://app.zerops.io/recipes/rust-hello-world) for [Zerops](https://zerops.io) platform.
 
-⬇️ **Full recipe page and deploy with one-click**
+## Integration Guide
 
-[![Deploy on Zerops](https://github.com/zeropsio/recipe-shared-assets/blob/main/deploy-button/light/deploy-button.svg)](https://app.zerops.io/recipes/rust-hello-world?environment=small-production)
+<!-- #ZEROPS_EXTRACT_START:integration-guide# -->
 
-![rust](https://github.com/zeropsio/recipe-shared-assets/blob/main/covers/svg/cover-rust.svg)
+### 1. Adding `zerops.yaml`
+The main application configuration file you place at the root of your repository, it tells Zerops how to build, deploy and run your application.
 
-Offered in examples for the whole development lifecycle — from environments for AI agents like [Claude Code](https://www.anthropic.com/claude-code) or [opencode](https://opencode.ai) through environments for remote (CDE) or local development of each developer to stage and productions of all sizes.
+```yaml
+zerops:
+  # Defining production setup, that will run the built application.
+  - setup: prod
+    build:
+      # Using Rust build base image, that has Rust (and cargo) pre-installed.
+      base: rust@latest
+      buildCommands:
+        # Build the application in release mode for optimal performance.
+        - cargo build --release
+      deployFiles:
+        # We only need the compiled binary for production.
+        - target/release/rust-hello-world-app
+    run:
+      # Using the same Rust base for the runtime environment.
+      base: rust@latest
+      ports:
+        - port: 3000
+          # Our app is an HTTP API. Mark the port as HTTP
+          # so we can enable public HTTPS access.
+          httpSupport: true
+      # Execute the production binary directly from its build path.
+      start: ./target/release/rust-hello-world-app
 
-- **AI agent** [[info]](/0%20—%20AI%20Agent) — [[deploy with one click]](https://app.zerops.io/recipes/rust-hello-world?environment=ai-agent)
-- **Remote (CDE)** [[info]](/1%20—%20Remote%20(CDE)) — [[deploy with one click]](https://app.zerops.io/recipes/rust-hello-world?environment=remote-cde)
-- **Local** [[info]](/2%20—%20Local) — [[deploy with one click]](https://app.zerops.io/recipes/rust-hello-world?environment=local)
-- **Stage** [[info]](/3%20—%20Stage) — [[deploy with one click]](https://app.zerops.io/recipes/rust-hello-world?environment=stage)
-- **Small Production** [[info]](/4%20—%20Small%20Production) — [[deploy with one click]](https://app.zerops.io/recipes/rust-hello-world?environment=small-production)
-- **Highly-available Production** [[info]](/5%20—%20Highly-available%20Production) — [[deploy with one click]](https://app.zerops.io/recipes/rust-hello-world?environment=highly-available-production)
-
----
-
-For more advanced examples see all [Rust recipes](https://app.zerops.io/recipes?lf=rust) on Zerops.
-
-Need help setting your project up? Join [Zerops Discord community](https://discord.gg/zeropsio).
+  # Dev setup is for remote development or AI agent use-cases.
+  - setup: dev
+    build:
+      base: rust@latest
+      buildCommands:
+        # Build in debug mode for development.
+        - cargo build
+      deployFiles:
+        # For development, we include the debug binary and the source code 
+        # to allow for debugging and live changes inside the container.
+        - target/debug/rust-hello-world-app
+        - src
+        - Cargo.toml
+        - Cargo.lock
+    run:
+      base: rust@latest
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        # Enable full backtraces for easier debugging during development.
+        RUST_BACKTRACE: "1"
+      # Start the debug version of the application.
+      start: ./target/debug/rust-hello-world-app
+```
+<!-- #ZEROPS_EXTRACT_END:integration-guide# -->

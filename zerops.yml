@@ -1,25 +1,36 @@
 zerops:
+  # Defining production setup, that will run the built application.
   - setup: prod
     build:
+      # Using Rust build base image, that has Rust (and cargo) pre-installed.
       base: rust@latest
       buildCommands:
+        # Build the application in release mode for optimal performance.
         - cargo build --release
       deployFiles:
+        # We only need the compiled binary for production.
         - target/release/rust-hello-world-app
     run:
+      # Using the same Rust base for the runtime environment.
       base: rust@latest
       ports:
         - port: 3000
+          # Our app is an HTTP API. Mark the port as HTTP
+          # so we can enable public HTTPS access.
           httpSupport: true
-      # Pointing directly to the binary location inside the target folder
+      # Execute the production binary directly from its build path.
       start: ./target/release/rust-hello-world-app
 
+  # Dev setup is for remote development or AI agent use-cases.
   - setup: dev
     build:
       base: rust@latest
       buildCommands:
+        # Build in debug mode for development.
         - cargo build
       deployFiles:
+        # For development, we include the debug binary and the source code 
+        # to allow for debugging and live changes inside the container.
         - target/debug/rust-hello-world-app
         - src
         - Cargo.toml
@@ -30,6 +41,7 @@ zerops:
         - port: 3000
           httpSupport: true
       envVariables:
+        # Enable full backtraces for easier debugging during development.
         RUST_BACKTRACE: "1"
-      # Pointing directly to the debug binary
+      # Start the debug version of the application.
       start: ./target/debug/rust-hello-world-app
