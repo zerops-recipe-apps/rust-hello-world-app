@@ -5,15 +5,14 @@ zerops:
       buildCommands:
         - cargo build --release
       deployFiles:
-        # The "." at the end extracts the binary to the root directory
-        - target/release/rust-hello-world-app .
+        - target/release/rust-hello-world-app
     run:
       base: rust@latest
       ports:
         - port: 3000
           httpSupport: true
-      # Now the binary is in the root, so this path works perfectly
-      start: ./rust-hello-world-app
+      # Pointing directly to the binary location inside the target folder
+      start: ./target/release/rust-hello-world-app
 
   - setup: dev
     build:
@@ -21,8 +20,7 @@ zerops:
       buildCommands:
         - cargo build
       deployFiles:
-        # Extracting everything to root for an easy development environment
-        - target/debug/rust-hello-world-app .
+        - target/debug/rust-hello-world-app
         - src
         - Cargo.toml
         - Cargo.lock
@@ -33,4 +31,5 @@ zerops:
           httpSupport: true
       envVariables:
         RUST_BACKTRACE: "1"
-      start: ./rust-hello-world-app
+      # Pointing directly to the debug binary
+      start: ./target/debug/rust-hello-world-app
