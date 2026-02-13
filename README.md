@@ -1,3 +1,16 @@
+// README.md
+
+# Rust Hello World Recipe App
+Simple Rust API using Axum with a single endpoint that reads from and writes to a PostgreSQL database. Used within [Rust Hello World recipe](https://app.zerops.io/recipes/rust-hello-world) for [Zerops](https://zerops.io) platform.
+
+## Integration Guide
+
+<!-- #ZEROPS_EXTRACT_START:integration-guide# -->
+
+### 1. Adding `zerops.yaml`
+The main application configuration file you place at the root of your repository, it tells Zerops how to build, deploy and run your application.
+
+```yaml
 zerops:
   # Defining production setup, that will run the built application.
   - setup: prod
@@ -45,3 +58,5 @@ zerops:
         RUST_BACKTRACE: "1"
       # Start the debug version of the application.
       start: ./target/debug/rust-hello-world-app
+```
+<!-- #ZEROPS_EXTRACT_END:integration-guide# -->
