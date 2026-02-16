@@ -108,6 +108,15 @@ async fn add_entry(State(pool): State<PgPool>) -> (StatusCode, Json<Value>) {
     (StatusCode::CREATED, Json(response))
 }
 
-async fn status_check() -> Json<Value> {
-    Json(json!({"status": "UP"}))
+async fn status_check(State(pool): State<PgPool>) -> Json<Value> {
+    // Check database connectivity
+    let db_status = match sqlx::query("SELECT 1").execute(&pool).await {
+        Ok(_) => "OK",
+        Err(_) => "ERROR",
+    };
+
+    // Extensible for future services (cache, search, etc.)
+    Json(json!({
+        "database": db_status
+    }))
 }
