@@ -44,4 +44,4 @@ zerops:
         # Enable full backtraces for easier debugging during development.
         RUST_BACKTRACE: "1"
       # Start the debug version of the application.
-      start: ./target/debug/rust-hello-world-app
+      start: zsc noop --silent
