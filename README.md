@@ -1,5 +1,3 @@
-// README.md
-
 # Rust Hello World Recipe App
 Simple Rust API using Axum with a single endpoint that reads from and writes to a PostgreSQL database. Used within [Rust Hello World recipe](https://app.zerops.io/recipes/rust-hello-world) for [Zerops](https://zerops.io) platform.
 
