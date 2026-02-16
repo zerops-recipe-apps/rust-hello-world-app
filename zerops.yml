@@ -7,41 +7,66 @@ zerops:
       buildCommands:
         # Build the application in release mode for optimal performance.
         - cargo build --release
-      deployFiles:
-        # We only need the compiled binary for production.
-        - target/release/rust-hello-world-app
+      # All we need to deploy to runtime containers is the built binary.
+      # Package only it.
+      deployFiles: ./target/release/rust-hello-world-app
+      # Speed up builds by caching cargo directories,
+      # that are located outside the build source directory.
+      cache: true
     run:
-      # Using the same Rust base for the runtime environment.
-      base: rust@latest
+      # Now, we have to say into which base image we want to deploy our app.
+      # Since Rust is a compiled language that produces a binary,
+      # we can grab a lightweight Linux distribution to run the binary in.
+      base: alpine@3.21
+      # Defining ports that can be accessed from outside the application container.
       ports:
         - port: 3000
           # Our app is an HTTP API. Mark the port as HTTP
-          # so we can enable public HTTPS access.
+          # so we can possibly enable public HTTPS access.
           httpSupport: true
-      # Execute the production binary directly from its build path.
+      # Adding environment variables.
+      # Note that we reference database service environment variables,
+      # that are automatically generated and accessible for all PostgreSQL services.
+      envVariables:
+        DB_NAME: db
+        DB_HOST: ${db_hostname}
+        # For example, this 'DB_PORT' env will resolve to 6543 in case of a PostgreSQL database.
+        DB_PORT: ${db_port}
+        DB_USER: ${db_user}
+        DB_PASS: ${db_password}
+      # This is how we execute our app process.
+      # We build the binary artifact above.
       start: ./target/release/rust-hello-world-app
 
   # Dev setup is for remote development or AI agent use-cases.
   - setup: dev
     build:
       base: rust@latest
-      buildCommands:
-        # Build in debug mode for development.
-        - cargo build
-      deployFiles:
-        # For development, we include the debug binary and the source code 
-        # to allow for debugging and live changes inside the container.
-        - target/debug/rust-hello-world-app
-        - src
-        - Cargo.toml
-        - Cargo.lock
+      # Start by packaging all the application source code
+      # in the repository, so we can work on it inside the runtime container.
+      # No build steps are needed, since we only care about source code.
+      deployFiles: .
     run:
+      # Choosing Ubuntu as OS for development, as it has
+      # richer tool-set then Alpine.
+      os: ubuntu
       base: rust@latest
+      # We would also like to test and try the app from the outside,
+      # make the development port accessible.
       ports:
         - port: 3000
           httpSupport: true
+      # Use the same environment variables for development,
+      # they will be available in the environment of spawned shells, IDEs or AI agents.
       envVariables:
+        DB_NAME: db
+        DB_HOST: ${db_hostname}
+        DB_PORT: ${db_port}
+        DB_USER: ${db_user}
+        DB_PASS: ${db_password}
         # Enable full backtraces for easier debugging during development.
         RUST_BACKTRACE: "1"
-      # Start the debug version of the application.
-      start: ./target/debug/rust-hello-world-app
+      # We don't want to run anything - we will execute our
+      # build, test and run commands manually inside the container.
+      # Start command will be optional in the future. Use noop dummy command.
+      start: zsc noop --silent
