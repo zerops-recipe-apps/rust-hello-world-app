@@ -1,16 +1,16 @@
-<!-- #ZEROPS_EXTRACT_START:intro# -->
 # Rust Hello World Recipe App
 
-Actix-Web application connected to PostgreSQL, with a health check endpoint at `/` that verifies database connectivity and queries data seeded by an idempotent migration. Used within [Rust Hello World recipe](https://app.zerops.io/recipes/rust-hello-world) for [Zerops](https://zerops.io) platform.
+<!-- start-fragment: intro -->
+Actix Web application connected to PostgreSQL, with a health check endpoint at `/` that verifies database connectivity and queries migrated data. Used within [Rust Hello World recipe](https://app.zerops.io/recipes/rust-hello-world) for [Zerops](https://zerops.io) platform.
+<!-- end-fragment: intro -->
 
 **Full recipe page and deploy with one-click**
 
 [![Deploy on Zerops](https://github.com/zeropsio/recipe-shared-assets/blob/main/deploy-button/light/deploy-button.svg)](https://app.zerops.io/recipes/rust-hello-world?environment=small-production)
 
 ![Rust cover](https://github.com/zeropsio/recipe-shared-assets/blob/main/covers/svg/cover-rust.svg)
-<!-- #ZEROPS_EXTRACT_END:intro# -->
 
-<!-- #ZEROPS_EXTRACT_START:integration-guide# -->
+<!-- start-fragment: integration-guide -->
 ## Integration Guide
 
 ### 1. Adding `zerops.yaml`
@@ -18,46 +18,29 @@ The main application configuration file you place at the root of your repository
 
 ```yaml
 zerops:
-  # Production setup — compile optimized release binaries and deploy minimal footprint.
-  # Two binaries are built: the web server and the migration runner. Both land in
-  # target/release/ and are deployed explicitly so the runtime container stays lean.
-  # Contrast with the 'dev' setup below, which deploys full source for SSH development.
+  # Production setup — compile release binaries, deploy minimal footprint.
+  # Matching rust@stable for build and run prevents glibc version mismatches.
   - setup: prod
     build:
       base: rust@stable
-      # Ubuntu provides glibc, which the Rust toolchain links against by default.
-      # Alpine uses musl — running a glibc-linked binary there would fail with
-      # "not found" or "Exec format error". Matching build and runtime OS avoids this.
       os: ubuntu
-
-      # Redirect Cargo's registry into the project tree so Zerops can cache it
-      # between builds. The default ~/.cargo is outside the project and unreachable
-      # by the cache system. Must match the 'cache' path below.
+      # Redirect Cargo registry into the project tree so Zerops can cache it.
+      # build.envVariables persists across all build steps — not just one command.
       envVariables:
         CARGO_HOME: ./.cargo
-
       buildCommands:
-        # --release: enables full optimizations (LLVM, inlining, dead-code elimination).
-        # --locked: requires Cargo.lock to be committed and match Cargo.toml exactly —
-        # prevents silent dependency drift between CI and production builds.
-        # Both binaries defined in [[bin]] sections of Cargo.toml are built in one pass.
+        # --locked requires Cargo.lock in source; prevents silent dependency drift.
+        # Builds both rust-hello-world and migrate binaries (all [[bin]] targets).
         - cargo build --release --locked
-
       deployFiles:
-        # Deploy both release binaries explicitly. The runtime container needs the
-        # web server to serve requests and the migration binary to run initCommands.
-        # Using full paths (not the ~/strip trick) keeps the runtime layout explicit.
+        # Both binaries ship to runtime — migrate runs in initCommands, not build time.
         - ./target/release/rust-hello-world
         - ./target/release/migrate
-
       cache:
-        # Cache the downloaded crate registry. First build: ~2 min downloading crates.
-        # Subsequent builds with cache: seconds. Path matches CARGO_HOME above.
+        # Cache downloaded registry; compiled artifacts are version-specific, not worth caching.
         - .cargo/registry
 
-    # readinessCheck verifies each new runtime container is healthy BEFORE the project
-    # balancer routes traffic to it. Without this, users would see 502 errors during
-    # the brief window between container start and application ready-to-serve.
+    # Readiness check: verifies containers are ready before project balancer routes traffic.
     deploy:
       readinessCheck:
         httpGet:
@@ -66,101 +49,126 @@ zerops:
 
     run:
       base: rust@stable
-      # Ubuntu runtime matches the build OS — glibc-linked binaries require glibc.
-      # The Rust toolchain in this image is unused at runtime (binary is pre-compiled),
-      # but the ubuntu base is necessary for the glibc dependency.
+      # tokio-postgres links against glibc — ubuntu runtime matches the build environment.
       os: ubuntu
 
-      # initCommands run on every container start, BEFORE the application starts.
-      # Running migrations here (not in buildCommands) ensures the schema update and
-      # the new binary are always deployed together — if deploy fails, both roll back.
-      # zsc execOnce ensures only one container runs the migration when scaling to
-      # multiple replicas, preventing race conditions on INSERT/CREATE TABLE.
+      # Run migration once per deploy. In initCommands — not buildCommands — so
+      # migration and code deploy atomically. zsc execOnce prevents race conditions
+      # when multiple containers start simultaneously.
       initCommands:
-        - zsc execOnce ${ZEROPS_appVersionId} -- ./target/release/migrate
+        - zsc execOnce ${appVersionId} -- ./target/release/migrate
 
       ports:
         - port: 3000
           httpSupport: true
-
-      # Zerops injects these as environment variables into each runtime container.
-      # Variable names follow the {hostname}_{key} pattern — 'db' is the hostname
-      # defined in the import.yaml, so db_hostname, db_port, etc.
       envVariables:
+        # ${db_hostname} references the 'db' service — Zerops pattern: {hostname}_{key}.
         DB_HOST: ${db_hostname}
         DB_PORT: ${db_port}
         DB_USER: ${db_user}
         DB_PASS: ${db_password}
         DB_NAME: db
-
-      # Reserve ~40% of minRam as free headroom. Rust has no GC, but actix-web
-      # worker threads allocate per-request. Without headroom, traffic spikes OOM-kill.
-      verticalAutoscaling:
-        minRam: 0.25
-        minFreeRamGB: 0.1
-
       start: ./target/release/rust-hello-world
 
-  # Development setup — deploy full source code so developers can SSH in and work
-  # interactively. The build container only fetches dependencies; no compilation happens
-  # here because the developer will compile and run the app themselves via SSH.
+  # Dev setup — deploy full source tree, developer runs the app via SSH.
+  # cargo fetch downloads dependencies; developer compiles and runs interactively.
   - setup: dev
     build:
       base: rust@stable
       os: ubuntu
-
       envVariables:
-        # Same CARGO_HOME as prod — keeps the cache path consistent across setups.
-        # At runtime this is overridden to an absolute path (see run.envVariables).
         CARGO_HOME: ./.cargo
-
       buildCommands:
-        # Fetch only — don't compile. Developer will run 'cargo run' or 'cargo build'
-        # via SSH after SSHing into the container. Pre-compiling wastes time because
-        # the developer will immediately change code and recompile anyway.
+        # Only fetch dependencies — no compilation. Developer runs cargo build/run via SSH.
         - cargo fetch
-
-      # Deploy the entire working directory: source code, Cargo.toml/lock,
-      # and the downloaded .cargo/registry. This gives the developer a ready-to-compile
-      # workspace with all crates already cached locally.
       deployFiles:
+        # Deploy entire source tree (includes downloaded registry) for SSH development.
         - ./
-
       cache:
         - .cargo/registry
 
     run:
       base: rust@stable
-      # Ubuntu provides both glibc AND a richer toolset for interactive development:
-      # apt-get, curl, git, etc. Alpine's minimalism is ideal for production but
-      # frustrating when SSH'd in and needing to install debugging tools.
+      # ubuntu provides apt-get and richer toolset for interactive SSH sessions.
       os: ubuntu
+
+      initCommands:
+        # cargo run --bin migrate compiles on first deploy (debug mode, one-time cost).
+        # zsc execOnce ensures it runs exactly once even with multiple containers.
+        - zsc execOnce ${appVersionId} -- cargo run --bin migrate
 
       ports:
         - port: 3000
           httpSupport: true
-
       envVariables:
         DB_HOST: ${db_hostname}
         DB_PORT: ${db_port}
         DB_USER: ${db_user}
         DB_PASS: ${db_password}
         DB_NAME: db
-        # Absolute path needed for interactive SSH sessions — the shell's working
-        # directory may differ from /var/www, so a relative ./.cargo could resolve
-        # to an unexpected location. Prod build used relative (correct for build steps);
-        # runtime uses absolute (correct for SSH and cargo invocations).
+        # Absolute path — SSH sessions need CARGO_HOME to find the deployed registry.
         CARGO_HOME: /var/www/.cargo
-
-      # The migration still runs via zsc execOnce before the container becomes idle.
-      # This means when the developer SSHs in, the database schema is already set up
-      # and the greetings table is seeded — they can start coding immediately.
-      initCommands:
-        - zsc execOnce ${ZEROPS_appVersionId} -- cargo run --bin migrate
-
-      # zsc noop keeps the container alive without starting the application.
-      # Zerops requires a long-running process. The developer starts the server
-      # manually via SSH: cargo run --bin rust-hello-world
+      # Container stays idle — developer drives via SSH (cargo run, cargo watch, etc.).
       start: zsc noop --silent
 ```
-<!-- #ZEROPS_EXTRACT_END:integration-guide# -->
+
+### 2. Environment variables
+
+Zerops injects all variables at runtime — no `.env` file needed. Variable names follow the `{hostname}_{key}` pattern based on the service hostname defined in your import.yaml.
+
+| Variable | Source | Notes |
+|----------|--------|-------|
+| `DB_HOST` | `${db_hostname}` | Resolves to the `db` service hostname |
+| `DB_PORT` | `${db_port}` | PostgreSQL default: 5432 |
+| `DB_USER` | `${db_user}` | Auto-generated credentials |
+| `DB_PASS` | `${db_password}` | Auto-generated credentials |
+| `DB_NAME` | `db` | Static — matches the service hostname |
+
+### 3. Migration
+
+`src/bin/migrate.rs` creates the `greetings` table and seeds the initial row. It uses the same database driver (`tokio-postgres`) and environment variables as the main application. The migration is idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`) and runs via `zsc execOnce` in `initCommands` — once per deploy, regardless of container count.
+
+### 4. `Cargo.lock`
+
+Commit `Cargo.lock` to your repository. The production build uses `--locked` to ensure deterministic builds. If you're starting fresh: run `cargo fetch` locally (or push the dev setup first, then commit the generated lockfile from the runtime container).
+<!-- end-fragment: integration-guide -->
+
+---
+
+## Your Knowledge Base
+
+**You are expected to know**: build tools/package managers per language, deployFiles vs cache per runtime, base images for compiled vs interpreted languages, standard ports/frameworks, database drivers, idiomatic health checks, dependency file formats, tool differences (`cargo build --release --locked` vs `cargo fetch`), use case matching (prod=strict, dev=flexible), idiomatic migration patterns per language (raw SQL execution via the language's database driver).
+
+**Apply this to create**:
+- buildCommands for each setup's use case
+- Migration script using the same database driver as the main app
+- deployFiles based on what runtime needs (explicit names, not globs) — including migration scripts/binaries
+- cache configuration for reusable artifacts (aligned with custom tool paths if any)
+- start commands matching runtime environment
+- initCommands with `zsc execOnce` wrapping the migration runner
+- dependency installation matching dev vs prod context
+- .gitignore covering actual artifact paths (especially when using custom tool HOME/cache dirs)
+
+---
+
+## Rules
+
+1. Health check at `/` — not `/health`, not `/status`
+2. Health check must actually test connections AND query migrated data — no fake "OK", no hardcoded greeting
+3. Env vars follow `{hostname}_{key}` pattern — not `{service_type}`
+4. Non-obvious decisions have WHY comments — three-tier system at 85% level
+5. integration-guide fragment includes full zerops.yaml with comments
+6. All 6 environments exist
+7. Project names are unique — `{lang}-hello-world-{environment}`
+8. Small Production has `minContainers: 2`
+9. HA Production has `corePackage: SERIOUS` and dedicated CPUs
+10. All databases/caches/storage have `priority: 10`
+11. Every import.yaml is self-contained (Self-Containment Rule)
+12. Custom tool HOME/cache paths set via `build.envVariables` — never inline shell prefixes or `prepareCommands` exports
+13. Cache, deployFiles, and .gitignore agree on those same custom paths
+14. **CRITICAL**: `minRam`, `minFreeRamGB`, and `cpuMode` MUST be nested under `verticalAutoscaling`.
+15. **CRITICAL**: All migrations in `initCommands` MUST be wrapped in `zsc execOnce ${appVersionId}`.
+16. **CRITICAL**: Migration binary must be included in `deployFiles` — it runs at runtime, not build time.
+17. Migration SQL must be idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`) as defense-in-depth.
+18. For compiled languages, migration binary must be built in `buildCommands` alongside the main app binary.
+19. **CRITICAL**: `intro` fragment wraps ONLY description text — never the title, deploy button, or cover image.
