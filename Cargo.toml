@@ -4,8 +4,16 @@ version = "0.1.0"
 edition = "2021"
 default-run = "rust-hello-world"
 
+[[bin]]
+name = "rust-hello-world"
+path = "src/main.rs"
+
+[[bin]]
+name = "migrate"
+path = "src/bin/migrate.rs"
+
 [dependencies]
 actix-web = "4"
 tokio-postgres = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
