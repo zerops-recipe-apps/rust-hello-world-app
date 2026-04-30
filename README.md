@@ -126,3 +126,10 @@ zerops:
       start: zsc noop --silent
 ```
 <!-- #ZEROPS_EXTRACT_END:integration-guide# -->
+
+
+<!-- #ZEROPS_EXTRACT_START:knowledge-base# -->
+### Gotchas
+
+- **Build container has no `pkg-config` / `libssl-dev`** — crates defaulting to `native-tls` (`reqwest`, `hyper-tls`, …) fail with `Could not find directory of OpenSSL installation`. Use rustls-tls instead: `reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }`. Same pattern for any HTTP client crate.
+<!-- #ZEROPS_EXTRACT_END:knowledge-base# -->
