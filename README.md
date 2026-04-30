@@ -126,3 +126,26 @@ zerops:
       start: zsc noop --silent
 ```
 <!-- #ZEROPS_EXTRACT_END:integration-guide# -->
+
+
+<!-- #ZEROPS_EXTRACT_START:knowledge-base# -->
+### Gotchas
+
+- **Rust build container has no `pkg-config` / `libssl-dev`** — any crate
+  that defaults to `native-tls` (most prominently `reqwest`, but also
+  `hyper-tls`, `async-native-tls`, etc.) tries to link system OpenSSL
+  via `pkg-config` and fails the build with `Could not find directory of
+  OpenSSL installation` and `pkg-config command could not be found`.
+  Switch to `rustls-tls` (pure Rust TLS, no system deps):
+
+  ```toml
+  reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+  ```
+
+  Same pattern for any HTTP client crate that defaults to native TLS:
+  disable default features, then enable `rustls-tls` (or the crate's
+  equivalent rustls feature) plus only the JSON / HTTP-method / etc.
+  features actually needed. The Zerops Rust runtime is intentionally
+  minimal — there is no apt-install-libssl-dev escape hatch in the
+  build phase.
+<!-- #ZEROPS_EXTRACT_END:knowledge-base# -->
